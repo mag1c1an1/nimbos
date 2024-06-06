@@ -6,7 +6,7 @@ BUILD_C ?= y
 
 build_dir := build/$(ARCH)
 
-build: rust c
+build: rust 
 
 build_dir:
 	@mkdir -p $(build_dir)

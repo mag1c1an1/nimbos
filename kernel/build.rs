@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use toml::Value;
 
 fn main() {
-    println!("cargo:rerun-if-changed=../user/c/src");
+    // println!("cargo:rerun-if-changed=../user/c/src");
     println!("cargo:rerun-if-changed=../user/rust/src");
     println!("cargo:rerun-if-changed=.makeargs");
 
