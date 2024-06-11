@@ -8,7 +8,7 @@
 _start:
     mov     edi, eax        // magic
     mov     esi, ebx        // multiboot info
-    jmp     entry32
+    jmp     bsp_entry32
 
 .balign 4
 .type multiboot_header, STT_OBJECT
@@ -22,70 +22,115 @@ multiboot_header:
     .int    ebss - {offset}                    // bss_end_addr
     .int    _start - {offset}                  // entry_addr
 
-entry32:
-    // load the temporary GDT
-    lgdt    [.Ltmp_gdt_desc_phys - {offset}]
-    mov     ax, 0x18    // data segment selector
+# Common code in 32-bit, prepare states to enter 64-bit.
+.macro ENTRY32_COMMON
+    # set data segment selectors
+    mov     ax, 0x18
     mov     ss, ax
     mov     ds, ax
     mov     es, ax
     mov     fs, ax
     mov     gs, ax
 
-    // set PAE, PGE bit in CR4
+    # set PAE, PGE bit in CR4
     mov     eax, {cr4}
     mov     cr4, eax
 
-    // load the temporary page table
+    # load the temporary page table
     lea     eax, [.Ltmp_pml4 - {offset}]
     mov     cr3, eax
 
-    // set LME, NXE bit in IA32_EFER
+    # set LME, NXE bit in IA32_EFER
     mov     ecx, {efer_msr}
     mov     edx, 0
     mov     eax, {efer}
     wrmsr
 
-    // set protected mode, write protect, paging bit in CR0
+    # set protected mode, write protect, paging bit in CR0
     mov     eax, {cr0}
     mov     cr0, eax
+.endm
 
-    // long return to the 64-bit entry
-    push    0x10    // code64 segment selector
-    lea     eax, [entry64 - {offset}]
-    push    eax
-    retf
-
-.code64
-entry64:
-    // reload GDT by high address
-    movabs  rax, offset .Ltmp_gdt_desc
-    lgdt    [rax]
-
-    // clear segment selectors
+# Common code in 64-bit
+.macro ENTRY64_COMMON
+    # clear segment selectors
     xor     ax, ax
     mov     ss, ax
     mov     ds, ax
     mov     es, ax
     mov     fs, ax
     mov     gs, ax
+.endm
+
+.code32
+bsp_entry32:
+    // load the temporary GDT
+    lgdt    [.Ltmp_gdt_desc - {offset}]
+
+    ENTRY32_COMMON
+    # mov     ax, 0x18    // data segment selector
+    # mov     ss, ax
+    # mov     ds, ax
+    # mov     es, ax
+    # mov     fs, ax
+    # mov     gs, ax
+
+    # // set PAE, PGE bit in CR4
+    # mov     eax, {cr4}
+    # mov     cr4, eax
+
+    # // load the temporary page table
+    # lea     eax, [.Ltmp_pml4 - {offset}]
+    # mov     cr3, eax
+
+    # // set LME, NXE bit in IA32_EFER
+    # mov     ecx, {efer_msr}
+    # mov     edx, 0
+    # mov     eax, {efer}
+    # wrmsr
+
+    # // set protected mode, write protect, paging bit in CR0
+    # mov     eax, {cr0}
+    # mov     cr0, eax
+
+    // long return to the 64-bit entry
+    ljmp    0x10, offset bsp_entry64 - {offset}     # 0x10 is code64 segment
+    # push    0x10    // code64 segment selector
+    # lea     eax, [bsp_entry64 - {offset}]
+    # push    eax
+    # retf
+
+.code64
+bsp_entry64:
+    // reload GDT by high address
+    # movabs  rax, offset .Ltmp_gdt_desc
+    # lgdt    [rax]
+
+    ENTRY64_COMMON
+    // clear segment selectors
+    # xor     ax, ax
+    # mov     ss, ax
+    # mov     ds, ax
+    # mov     es, ax
+    # mov     fs, ax
+    # mov     gs, ax
 
     // set stack and jump to rust_main
     movabs  rsp, offset boot_stack_top
-    movabs  rax, offset rust_main
+    movabs  rax, offset {entry}
     call    rax
 1:  jmp     1b
 
 .section .rodata
 .balign 8
-.Ltmp_gdt_desc_phys:
+.Ltmp_gdt_desc:
     .short  .Ltmp_gdt_end - .Ltmp_gdt - 1   // limit
     .long   .Ltmp_gdt - {offset}            // base
 
-.balign 8
-.Ltmp_gdt_desc:
-    .short  .Ltmp_gdt_end - .Ltmp_gdt - 1   // limit
-    .quad   .Ltmp_gdt                       // base
+# .balign 8
+# .Ltmp_gdt_desc:
+#     .short  .Ltmp_gdt_end - .Ltmp_gdt - 1   // limit
+#     .quad   .Ltmp_gdt                       // base
 
 .section .data
 .balign 16

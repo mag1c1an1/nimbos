@@ -56,7 +56,7 @@ NN   NN  iii  mmm  mm  mm  bbbbbb    OOOO0    SSSSS
 ";
 
 #[no_mangle]
-pub fn rust_main() -> ! {
+pub fn rust_main(hart_id: usize, _dtb: usize) -> ! {
     clear_bss();
     drivers::init_early();
     println!("{}", LOGO);
@@ -73,6 +73,7 @@ pub fn rust_main() -> ! {
         option_env!("LOG").unwrap_or(""),
     );
 
+    println!("hart id: {}", hart_id);
     mm::init_heap_early();
     logging::init();
     info!("Logging is enabled.");

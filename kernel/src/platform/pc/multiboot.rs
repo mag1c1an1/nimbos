@@ -7,6 +7,23 @@ use x86_64::registers::model_specific::EferFlags;
 
 use crate::config::{BOOT_KERNEL_STACK_SIZE, PHYS_VIRT_OFFSET};
 
+extern "C" {
+    fn rust_main(hart_id: usize, dtb: usize) -> !;
+    #[cfg(feature = "smp")]
+    fn rust_main_secondary(hart_id: usize) -> !;
+}
+
+unsafe extern "C" fn rust_entry() {
+    rust_main(current_cpu_id(), 0);
+}
+
+fn current_cpu_id() -> usize {
+    match raw_cpuid::CpuId::new().get_feature_info() {
+        Some(finfo) => finfo.initial_local_apic_id() as usize,
+        None => 0,
+    }
+}
+
 const CR0: u64 = Cr0Flags::PROTECTED_MODE_ENABLE.bits()
     | Cr0Flags::MONITOR_COPROCESSOR.bits()
     | Cr0Flags::TASK_SWITCHED.bits()
@@ -22,6 +39,9 @@ global_asm!(
     boot_stack_size = const BOOT_KERNEL_STACK_SIZE,
     cr0 = const CR0,
     cr4 = const CR4,
+
+    entry = sym rust_entry,
+
     efer_msr = const x86::msr::IA32_EFER,
     efer = const EFER,
 );
